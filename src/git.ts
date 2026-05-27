@@ -81,11 +81,22 @@ export async function getRepositoryActivity(
     roots.map(async (root) => ({
       root,
       name: basename(root),
-      commits: await getCommits({ ...options, cwd: root }),
+      commits: await getCommitsSafely(root, options),
     })),
   );
 
   return activity.sort((left, right) => right.commits.length - left.commits.length);
+}
+
+async function getCommitsSafely(
+  root: string,
+  options: Omit<GetCommitsOptions, "cwd">,
+): Promise<CommitSummary[]> {
+  try {
+    return await getCommits({ ...options, cwd: root });
+  } catch {
+    return [];
+  }
 }
 
 async function walkForGitRepositories(

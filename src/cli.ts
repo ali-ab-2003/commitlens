@@ -14,6 +14,12 @@ import {
   saveGroqApiKey,
 } from "./config.js";
 import {
+  buildDigest,
+  buildDigestFromActivity,
+  type ActivityDigest,
+  type CountItem,
+} from "./digest.js";
+import {
   findGitRepositories,
   getCommits,
   getGitRoot,
@@ -55,15 +61,12 @@ program
       since: options.since,
       limit: Number.isFinite(limit) ? limit : 50,
     });
+    const digest = buildDigest(commits);
 
     console.log(`commitlens report`);
     console.log(`repo: ${root}`);
     console.log(`range: since ${options.since}`);
-    console.log(`commits: ${commits.length}`);
-
-    for (const commit of commits.slice(0, 10)) {
-      console.log(`- ${commit.date} ${commit.hash} ${commit.subject} (${commit.author})`);
-    }
+    printDigest(digest);
   });
 
 program
@@ -233,14 +236,16 @@ async function printAllReposReport(options: { since: string; limit: string }): P
   }
 
   const totalCommits = activity.reduce((sum, repo) => sum + repo.commits.length, 0);
+  const digest = buildDigestFromActivity(activity);
 
   console.log("commitlens report");
   console.log("scope: all configured repositories");
   console.log(`range: since ${options.since}`);
-  console.log(`repositories: ${activity.length}`);
+  console.log(`repositories scanned: ${activity.length}`);
   console.log(`commits: ${totalCommits}`);
+  printDigest(digest, { includeTotalCommits: false, includeRepos: true });
 
-  for (const repo of activity) {
+  for (const repo of activity.filter((item) => item.commits.length > 0)) {
     console.log("");
     console.log(`${repo.name}: ${repo.commits.length} commits`);
 
@@ -275,4 +280,61 @@ async function collectAllRepoActivity(
   }
 
   return getRepositoryActivity(repositories, { since, limit });
+}
+
+function printDigest(
+  digest: ActivityDigest,
+  options: { includeTotalCommits?: boolean; includeRepos?: boolean } = {},
+): void {
+  const includeTotalCommits = options.includeTotalCommits ?? true;
+
+  if (includeTotalCommits) {
+    console.log(`commits: ${digest.totalCommits}`);
+  }
+
+  console.log(`active days: ${digest.activeDays}`);
+  console.log(`current streak: ${formatDays(digest.currentStreak)}`);
+  console.log(`longest streak: ${formatDays(digest.longestStreak)}`);
+
+  if (digest.mostActiveDay) {
+    console.log(`most active day: ${digest.mostActiveDay.name}`);
+  }
+
+  printCountSection("top authors", digest.commitsByAuthor);
+
+  if (options.includeRepos) {
+    printCountSection("top repos", digest.commitsByRepo);
+  }
+
+  printListSection("recent highlights", digest.recentHighlights);
+}
+
+function printCountSection(title: string, items: CountItem[]): void {
+  if (items.length === 0) {
+    return;
+  }
+
+  console.log("");
+  console.log(`${title}:`);
+
+  for (const item of items.slice(0, 5)) {
+    console.log(`- ${item.name}: ${item.count}`);
+  }
+}
+
+function printListSection(title: string, items: string[]): void {
+  if (items.length === 0) {
+    return;
+  }
+
+  console.log("");
+  console.log(`${title}:`);
+
+  for (const item of items) {
+    console.log(`- ${item}`);
+  }
+}
+
+function formatDays(days: number): string {
+  return days === 1 ? "1 day" : `${days} days`;
 }
