@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { generateWithGroq } from "./ai.js";
+import { getConfigPath, maskSecret, readConfig, resolveGroqApiKey, saveGroqApiKey } from "./config.js";
 import { getCommits, getGitRoot, isGitRepository } from "./git.js";
 import { buildLinkedInPostPrompt, type LinkedInPostStyle } from "./linkedin.js";
 
@@ -56,11 +57,14 @@ program
       style: LinkedInPostStyle;
       model: string;
     }) => {
-      const apiKey = process.env.GROQ_API_KEY;
+      const apiKey = await resolveGroqApiKey();
 
       if (!apiKey) {
-        console.error("Missing GROQ_API_KEY.");
-        console.error("Set it for this PowerShell session:");
+        console.error("Missing Groq API key.");
+        console.error("Save it permanently:");
+        console.error("npm.cmd run dev -- config set-groq-key your_groq_api_key");
+        console.error("");
+        console.error("Or set it for this PowerShell session:");
         console.error('$env:GROQ_API_KEY="your_groq_api_key"');
         process.exitCode = 1;
         return;
@@ -102,6 +106,39 @@ program
       console.log(post);
     },
   );
+
+const config = program.command("config").description("Manage commitlens user configuration");
+
+config
+  .command("set-groq-key <apiKey>")
+  .description("Save a Groq API key for future commitlens post commands")
+  .action(async (apiKey: string) => {
+    const configPath = await saveGroqApiKey(apiKey);
+    console.log(`Saved Groq API key to ${configPath}`);
+  });
+
+config
+  .command("show")
+  .description("Show configured commitlens settings without revealing secrets")
+  .action(async () => {
+    const configPath = getConfigPath();
+    const currentConfig = await readConfig();
+
+    console.log(`config: ${configPath}`);
+    console.log(
+      `groqApiKey: ${
+        currentConfig.groqApiKey ? maskSecret(currentConfig.groqApiKey) : "not set"
+      }`,
+    );
+    console.log(`GROQ_API_KEY env override: ${process.env.GROQ_API_KEY ? "set" : "not set"}`);
+  });
+
+config
+  .command("path")
+  .description("Print the commitlens config file path")
+  .action(() => {
+    console.log(getConfigPath());
+  });
 
 program.parse();
 
