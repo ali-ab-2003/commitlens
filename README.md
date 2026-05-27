@@ -21,3 +21,13 @@ npm.cmd run dev -- config add-root "D:\Work"
 npm.cmd run dev -- report --all
 npm.cmd run dev -- post --all
 ```
+
+Choose an output format and save a copy:
+
+```powershell
+npm.cmd run dev -- report --format text
+npm.cmd run dev -- report --format markdown
+npm.cmd run dev -- report --format json
+npm.cmd run dev -- report --format markdown --save commitlens-reports\latest.md
+npm.cmd run dev -- report --all --format json --save
+```

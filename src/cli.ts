@@ -16,9 +16,8 @@ import {
 import {
   buildDigest,
   buildDigestFromActivity,
-  type ActivityDigest,
-  type CountItem,
 } from "./digest.js";
+import { formatReport, isReportFormat, saveReport, type ReportDocument, type ReportFormat } from "./format.js";
 import {
   findGitRepositories,
   getCommits,
@@ -42,7 +41,15 @@ program
   .option("-s, --since <date>", "Only include commits since this date", "30 days ago")
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
   .option("--all", "Scan all repositories under configured machine-wide roots")
-  .action(async (options: { since: string; limit: string; all?: boolean }) => {
+  .option("-f, --format <format>", "Output format: text, markdown, or json", "text")
+  .option("--save [path]", "Save the printed report. Optionally provide an output path")
+  .action(async (options: ReportOptions) => {
+    if (!isReportFormat(options.format)) {
+      console.error("Invalid format. Use one of: text, markdown, json.");
+      process.exitCode = 1;
+      return;
+    }
+
     if (options.all) {
       await printAllReposReport(options);
       return;
@@ -62,11 +69,17 @@ program
       limit: Number.isFinite(limit) ? limit : 50,
     });
     const digest = buildDigest(commits);
-
-    console.log(`commitlens report`);
-    console.log(`repo: ${root}`);
-    console.log(`range: since ${options.since}`);
-    printDigest(digest);
+    await printAndMaybeSaveReport(
+      {
+        title: "CommitLens",
+        scope: "current repository",
+        range: `since ${options.since}`,
+        repo: root,
+        digest,
+      },
+      options.format,
+      options.save,
+    );
   });
 
 program
@@ -227,7 +240,15 @@ function isLinkedInPostStyle(style: string): style is LinkedInPostStyle {
   return style === "humble" || style === "punchy" || style === "technical";
 }
 
-async function printAllReposReport(options: { since: string; limit: string }): Promise<void> {
+type ReportOptions = {
+  since: string;
+  limit: string;
+  all?: boolean;
+  format: ReportFormat;
+  save?: string | boolean;
+};
+
+async function printAllReposReport(options: ReportOptions): Promise<void> {
   const limit = Number.parseInt(options.limit, 10);
   const activity = await collectAllRepoActivity(options.since, Number.isFinite(limit) ? limit : 50);
 
@@ -235,24 +256,19 @@ async function printAllReposReport(options: { since: string; limit: string }): P
     return;
   }
 
-  const totalCommits = activity.reduce((sum, repo) => sum + repo.commits.length, 0);
   const digest = buildDigestFromActivity(activity);
-
-  console.log("commitlens report");
-  console.log("scope: all configured repositories");
-  console.log(`range: since ${options.since}`);
-  console.log(`repositories scanned: ${activity.length}`);
-  console.log(`commits: ${totalCommits}`);
-  printDigest(digest, { includeTotalCommits: false, includeRepos: true });
-
-  for (const repo of activity.filter((item) => item.commits.length > 0)) {
-    console.log("");
-    console.log(`${repo.name}: ${repo.commits.length} commits`);
-
-    for (const commit of repo.commits.slice(0, 5)) {
-      console.log(`- ${commit.date} ${commit.hash} ${commit.subject} (${commit.author})`);
-    }
-  }
+  await printAndMaybeSaveReport(
+    {
+      title: "CommitLens",
+      scope: "all configured repositories",
+      range: `since ${options.since}`,
+      repositoriesScanned: activity.length,
+      digest,
+      repositories: activity,
+    },
+    options.format,
+    options.save,
+  );
 }
 
 async function collectAllRepoActivity(
@@ -282,59 +298,22 @@ async function collectAllRepoActivity(
   return getRepositoryActivity(repositories, { since, limit });
 }
 
-function printDigest(
-  digest: ActivityDigest,
-  options: { includeTotalCommits?: boolean; includeRepos?: boolean } = {},
-): void {
-  const includeTotalCommits = options.includeTotalCommits ?? true;
+async function printAndMaybeSaveReport(
+  document: ReportDocument,
+  format: ReportFormat,
+  savePath?: string | boolean,
+): Promise<void> {
+  const output = formatReport(document, format);
+  console.log(output.trimEnd());
 
-  if (includeTotalCommits) {
-    console.log(`commits: ${digest.totalCommits}`);
+  if (savePath !== undefined) {
+    const outputPath = await saveReport({
+      content: output,
+      format,
+      outputPath: savePath,
+    });
+
+    console.log("");
+    console.log(`Saved report to ${outputPath}`);
   }
-
-  console.log(`active days: ${digest.activeDays}`);
-  console.log(`current streak: ${formatDays(digest.currentStreak)}`);
-  console.log(`longest streak: ${formatDays(digest.longestStreak)}`);
-
-  if (digest.mostActiveDay) {
-    console.log(`most active day: ${digest.mostActiveDay.name}`);
-  }
-
-  printCountSection("top authors", digest.commitsByAuthor);
-
-  if (options.includeRepos) {
-    printCountSection("top repos", digest.commitsByRepo);
-  }
-
-  printListSection("recent highlights", digest.recentHighlights);
-}
-
-function printCountSection(title: string, items: CountItem[]): void {
-  if (items.length === 0) {
-    return;
-  }
-
-  console.log("");
-  console.log(`${title}:`);
-
-  for (const item of items.slice(0, 5)) {
-    console.log(`- ${item.name}: ${item.count}`);
-  }
-}
-
-function printListSection(title: string, items: string[]): void {
-  if (items.length === 0) {
-    return;
-  }
-
-  console.log("");
-  console.log(`${title}:`);
-
-  for (const item of items) {
-    console.log(`- ${item}`);
-  }
-}
-
-function formatDays(days: number): string {
-  return days === 1 ? "1 day" : `${days} days`;
 }
