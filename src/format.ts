@@ -20,9 +20,18 @@ export type SaveReportOptions = {
   content: string;
   format: ReportFormat;
   outputPath?: string | boolean;
+  filenamePrefix?: string;
 };
 
-export function formatReport(document: ReportDocument, format: ReportFormat): string {
+export type FormatReportOptions = {
+  color?: boolean;
+};
+
+export function formatReport(
+  document: ReportDocument,
+  format: ReportFormat,
+  options: FormatReportOptions = {},
+): string {
   const reportDocument = withoutInactiveRepositories(document);
 
   if (format === "json") {
@@ -33,30 +42,34 @@ export function formatReport(document: ReportDocument, format: ReportFormat): st
     return formatMarkdownReport(reportDocument);
   }
 
-  return formatTextReport(reportDocument);
+  return formatTextReport(reportDocument, options);
 }
 
-export function formatTextReport(document: ReportDocument): string {
+export function formatTextReport(
+  document: ReportDocument,
+  options: FormatReportOptions = {},
+): string {
+  const theme = createTheme(options.color ?? true);
   const lines = [
-    chalk.bold.cyan("CommitLens"),
-    chalk.cyan("=========="),
-    chalk.dim("Offline Git activity digest"),
+    theme.title("CommitLens"),
+    theme.accent("=========="),
+    theme.dim("Offline Git activity digest"),
     "",
-    formatMetaLine("Scope", document.scope),
-    formatMetaLine("Range", document.range),
+    formatMetaLine("Scope", document.scope, theme),
+    formatMetaLine("Range", document.range, theme),
   ];
 
   if (document.repo) {
-    lines.push(formatMetaLine("Repo", document.repo));
+    lines.push(formatMetaLine("Repo", document.repo, theme));
   }
 
   if (document.repositoriesScanned !== undefined) {
-    lines.push(formatMetaLine("Repositories scanned", String(document.repositoriesScanned)));
+    lines.push(formatMetaLine("Repositories scanned", String(document.repositoriesScanned), theme));
   }
 
   lines.push(
     "",
-    formatSectionTitle("Summary"),
+    formatSectionTitle("Summary", theme),
     `  ${formatNumber(document.digest.totalCommits)} ${pluralize(document.digest.totalCommits, "commit")} across ${formatNumber(document.digest.activeDays)} ${pluralize(document.digest.activeDays, "active day")}`,
     formatStatLine("Current streak", formatDays(document.digest.currentStreak)),
     formatStatLine("Longest streak", formatDays(document.digest.longestStreak)),
@@ -66,24 +79,24 @@ export function formatTextReport(document: ReportDocument): string {
     lines.push(formatStatLine("Most active day", document.digest.mostActiveDay.name));
   }
 
-  appendCountSection(lines, "Top authors", document.digest.commitsByAuthor);
-  appendCountSection(lines, "Top repos", document.digest.commitsByRepo);
-  appendListSection(lines, "Recent highlights", document.digest.recentHighlights);
+  appendCountSection(lines, "Top authors", document.digest.commitsByAuthor, theme);
+  appendCountSection(lines, "Top repos", document.digest.commitsByRepo, theme);
+  appendListSection(lines, "Recent highlights", document.digest.recentHighlights, theme);
 
   const activeRepos = document.repositories?.filter((repo) => repo.commits.length > 0) ?? [];
 
   if (activeRepos.length > 0) {
-    lines.push("", formatSectionTitle("Repo details"));
+    lines.push("", formatSectionTitle("Repo details", theme));
 
     for (const repo of activeRepos) {
       lines.push(
         "",
-        `${chalk.bold(repo.name)} ${chalk.dim("-")} ${repo.commits.length} ${pluralize(repo.commits.length, "commit")}`,
+        `${theme.bold(repo.name)} ${theme.dim("-")} ${repo.commits.length} ${pluralize(repo.commits.length, "commit")}`,
       );
 
       for (const commit of repo.commits.slice(0, 5)) {
         lines.push(
-          `  ${chalk.dim(commit.date)} ${chalk.yellow(commit.hash)} ${commit.subject} ${chalk.dim(`(${commit.author})`)}`,
+          `  ${theme.dim(commit.date)} ${theme.warning(commit.hash)} ${commit.subject} ${theme.dim(`(${commit.author})`)}`,
         );
       }
     }
@@ -146,7 +159,7 @@ export function formatMarkdownReport(document: ReportDocument): string {
 }
 
 export async function saveReport(options: SaveReportOptions): Promise<string> {
-  const outputPath = resolveOutputPath(options.outputPath, options.format);
+  const outputPath = resolveOutputPath(options.outputPath, options.format, options.filenamePrefix);
   await mkdir(resolve(outputPath, ".."), { recursive: true });
   await writeFile(outputPath, options.content, "utf8");
   return outputPath;
@@ -156,50 +169,64 @@ export function isReportFormat(format: string): format is ReportFormat {
   return format === "text" || format === "markdown" || format === "json";
 }
 
-function resolveOutputPath(outputPath: string | boolean | undefined, format: ReportFormat): string {
+function resolveOutputPath(
+  outputPath: string | boolean | undefined,
+  format: ReportFormat,
+  filenamePrefix = "commitlens-report",
+): string {
   if (typeof outputPath === "string") {
     return resolve(outputPath);
   }
 
   const extension = format === "markdown" ? "md" : format;
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return resolve(join("commitlens-reports", `commitlens-report-${timestamp}.${extension}`));
+  return resolve(join("commitlens-reports", `${filenamePrefix}-${timestamp}.${extension}`));
 }
 
-function appendCountSection(lines: string[], title: string, items: CountItem[]): void {
+function appendCountSection(
+  lines: string[],
+  title: string,
+  items: CountItem[],
+  theme: TextTheme,
+): void {
   if (items.length === 0) {
     return;
   }
 
-  lines.push("", formatSectionTitle(title));
+  lines.push("", formatSectionTitle(title, theme));
 
   for (const item of items.slice(0, 5)) {
-    lines.push(formatStatLine(item.name, `${item.count}`));
+    lines.push(formatStatLine(item.name, `${item.count}`, theme));
   }
 }
 
-function appendListSection(lines: string[], title: string, items: string[]): void {
+function appendListSection(
+  lines: string[],
+  title: string,
+  items: string[],
+  theme: TextTheme,
+): void {
   if (items.length === 0) {
     return;
   }
 
-  lines.push("", formatSectionTitle(title));
+  lines.push("", formatSectionTitle(title, theme));
 
   for (const item of items) {
-    lines.push(`  ${chalk.dim("-")} ${item}`);
+    lines.push(`  ${theme.dim("-")} ${item}`);
   }
 }
 
-function formatMetaLine(label: string, value: string): string {
-  return `${chalk.dim(`${label}:`.padEnd(23))} ${value}`;
+function formatMetaLine(label: string, value: string, theme: TextTheme): string {
+  return `${theme.dim(`${label}:`.padEnd(23))} ${value}`;
 }
 
-function formatSectionTitle(title: string): string {
-  return chalk.bold.cyan(title);
+function formatSectionTitle(title: string, theme: TextTheme): string {
+  return theme.section(title);
 }
 
-function formatStatLine(label: string, value: string): string {
-  return `  ${chalk.dim(label.padEnd(21))} ${value}`;
+function formatStatLine(label: string, value: string, theme = createTheme(true)): string {
+  return `  ${theme.dim(label.padEnd(21))} ${value}`;
 }
 
 function appendMarkdownCountSection(lines: string[], title: string, items: CountItem[]): void {
@@ -251,4 +278,39 @@ function withoutInactiveRepositories(document: ReportDocument): ReportDocument {
     ...document,
     repositories: document.repositories.filter((repo) => repo.commits.length > 0),
   };
+}
+
+type TextTheme = {
+  accent: (value: string) => string;
+  bold: (value: string) => string;
+  dim: (value: string) => string;
+  section: (value: string) => string;
+  title: (value: string) => string;
+  warning: (value: string) => string;
+};
+
+function createTheme(color: boolean): TextTheme {
+  if (!color) {
+    return {
+      accent: identity,
+      bold: identity,
+      dim: identity,
+      section: identity,
+      title: identity,
+      warning: identity,
+    };
+  }
+
+  return {
+    accent: chalk.cyan,
+    bold: chalk.bold,
+    dim: chalk.dim,
+    section: chalk.bold.cyan,
+    title: chalk.bold.cyan,
+    warning: chalk.yellow,
+  };
+}
+
+function identity(value: string): string {
+  return value;
 }

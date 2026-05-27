@@ -50,6 +50,13 @@ describe("formatReport", () => {
     });
   });
 
+  it("can render text reports without color", () => {
+    const output = formatReport(document, "text", { color: false });
+
+    expect(output).toContain("CommitLens");
+    expect(output).not.toContain("\u001B[");
+  });
+
   it("removes zero-commit repositories from exported reports", () => {
     const output = formatReport(
       {

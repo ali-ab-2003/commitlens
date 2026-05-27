@@ -58,8 +58,8 @@ export function buildLinkedInPostPrompt(input: LinkedInPostInput): string {
     "Digest:",
     `- Total commits: ${report.digest.totalCommits}`,
     `- Active days: ${report.digest.activeDays}`,
-    `- Current streak: ${report.digest.currentStreak} days`,
-    `- Longest streak: ${report.digest.longestStreak} days`,
+    `- Current streak: ${formatDays(report.digest.currentStreak)}`,
+    `- Longest streak: ${formatDays(report.digest.longestStreak)}`,
     report.digest.mostActiveDay
       ? `- Most active day: ${report.digest.mostActiveDay.name}`
       : undefined,
@@ -78,4 +78,8 @@ export function buildLinkedInPostPrompt(input: LinkedInPostInput): string {
   ]
     .filter((line): line is string => line !== undefined)
     .join("\n");
+}
+
+function formatDays(days: number): string {
+  return days === 1 ? "1 day" : `${days} days`;
 }

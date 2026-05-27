@@ -3,32 +3,35 @@ import { buildDigest, buildDigestFromActivity } from "../src/digest.js";
 
 describe("buildDigest", () => {
   it("summarizes commit activity", () => {
-    const digest = buildDigest([
-      {
-        hash: "a1",
-        author: "Ali",
-        date: "2026-05-27",
-        subject: "Add digest engine",
-      },
-      {
-        hash: "b2",
-        author: "Ali",
-        date: "2026-05-26",
-        subject: "Wire report output",
-      },
-      {
-        hash: "b3",
-        author: "Ali",
-        date: "2026-05-27",
-        subject: "Format summary sections",
-      },
-      {
-        hash: "c3",
-        author: "Sam",
-        date: "2026-05-24",
-        subject: "Add tests",
-      },
-    ]);
+    const digest = buildDigest(
+      [
+        {
+          hash: "a1",
+          author: "Ali",
+          date: "2026-05-27",
+          subject: "Add digest engine",
+        },
+        {
+          hash: "b2",
+          author: "Ali",
+          date: "2026-05-26",
+          subject: "Wire report output",
+        },
+        {
+          hash: "b3",
+          author: "Ali",
+          date: "2026-05-27",
+          subject: "Format summary sections",
+        },
+        {
+          hash: "c3",
+          author: "Sam",
+          date: "2026-05-24",
+          subject: "Add tests",
+        },
+      ],
+      { today: "2026-05-27" },
+    );
 
     expect(digest.totalCommits).toBe(4);
     expect(digest.activeDays).toBe(3);
@@ -58,6 +61,23 @@ describe("buildDigest", () => {
       mostActiveDay: null,
       recentHighlights: [],
     });
+  });
+
+  it("returns zero current streak when there is no commit today", () => {
+    const digest = buildDigest(
+      [
+        {
+          hash: "a1",
+          author: "Ali",
+          date: "2026-05-26",
+          subject: "Yesterday only",
+        },
+      ],
+      { today: "2026-05-27" },
+    );
+
+    expect(digest.currentStreak).toBe(0);
+    expect(digest.longestStreak).toBe(1);
   });
 
   it("deduplicates recent highlights", () => {

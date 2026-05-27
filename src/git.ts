@@ -21,6 +21,9 @@ export type GetCommitsOptions = {
   cwd?: string;
   since?: string;
   limit?: number;
+  author?: string;
+  excludeMerges?: boolean;
+  excludeBots?: boolean;
 };
 
 export type RepositoryActivity = {
@@ -31,6 +34,21 @@ export type RepositoryActivity = {
 
 export async function getCommits(options: GetCommitsOptions = {}): Promise<CommitSummary[]> {
   const cwd = options.cwd ?? process.cwd();
+  const args = buildGitLogArgs(options);
+
+  try {
+    const result = await execa("git", args, { cwd });
+    return filterCommits(parseGitLog(result.stdout), options);
+  } catch (error) {
+    if (isGitLogEmptyRepositoryError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+}
+
+export function buildGitLogArgs(options: GetCommitsOptions = {}): string[] {
   const args = [
     "log",
     "--date=short",
@@ -45,16 +63,15 @@ export async function getCommits(options: GetCommitsOptions = {}): Promise<Commi
     args.push(`--max-count=${options.limit}`);
   }
 
-  try {
-    const result = await execa("git", args, { cwd });
-    return parseGitLog(result.stdout);
-  } catch (error) {
-    if (isGitLogEmptyRepositoryError(error)) {
-      return [];
-    }
-
-    throw error;
+  if (options.author) {
+    args.push(`--author=${options.author}`);
   }
+
+  if (options.excludeMerges) {
+    args.push("--no-merges");
+  }
+
+  return args;
 }
 
 function isGitLogEmptyRepositoryError(error: unknown): boolean {
@@ -81,7 +98,7 @@ export async function getRepositoryActivity(
     roots.map(async (root) => ({
       root,
       name: basename(root),
-      commits: await getCommitsSafely(root, options),
+      commits: filterCommits(await getCommitsSafely(root, options), options),
     })),
   );
 
@@ -96,6 +113,40 @@ async function getCommitsSafely(
     return await getCommits({ ...options, cwd: root });
   } catch {
     return [];
+  }
+}
+
+export async function getCurrentGitUser(cwd = process.cwd()): Promise<string | undefined> {
+  const email = await getGitConfigValue("user.email", cwd);
+
+  if (email) {
+    return email;
+  }
+
+  return getGitConfigValue("user.name", cwd);
+}
+
+export function filterCommits(
+  commits: CommitSummary[],
+  options: Pick<GetCommitsOptions, "excludeBots"> = {},
+): CommitSummary[] {
+  if (!options.excludeBots) {
+    return commits;
+  }
+
+  return commits.filter((commit) => !isBotAuthor(commit.author));
+}
+
+function isBotAuthor(author: string): boolean {
+  return /\b(bot|automation|github-actions)\b|\[bot\]/i.test(author);
+}
+
+async function getGitConfigValue(key: string, cwd: string): Promise<string | undefined> {
+  try {
+    const result = await execa("git", ["config", "--get", key], { cwd });
+    return result.stdout.trim() || undefined;
+  } catch {
+    return undefined;
   }
 }
 

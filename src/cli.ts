@@ -5,6 +5,7 @@ import { generateWithGroq } from "./ai.js";
 import {
   addRepoRoot,
   clearGroqApiKey,
+  clearRepoRoots,
   getConfigPath,
   getRepoRoots,
   maskSecret,
@@ -21,6 +22,7 @@ import { formatReport, isReportFormat, saveReport, type ReportDocument, type Rep
 import {
   findGitRepositories,
   getCommits,
+  getCurrentGitUser,
   getGitRoot,
   getRepositoryActivity,
   isGitRepository,
@@ -41,8 +43,23 @@ program
   .option("-s, --since <date>", "Only include commits since this date", "30 days ago")
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
   .option("--all", "Scan all repositories under configured machine-wide roots")
+  .option("--author <pattern>", "Only include commits matching this git author pattern")
+  .option("--mine", "Only include commits by the configured git user")
+  .option("--exclude-merges", "Exclude merge commits")
+  .option("--exclude-bots", "Exclude common bot authors")
   .option("-f, --format <format>", "Output format: text, markdown, or json", "text")
   .option("--save [path]", "Save the printed report. Optionally provide an output path")
+  .option("--no-color", "Disable colored terminal output")
+  .addHelpText(
+    "after",
+    `
+
+Examples:
+  $ commitlens report --since "7 days ago"
+  $ commitlens report --all --exclude-bots
+  $ commitlens report --author "Ali Abdullah" --format markdown --save
+`,
+  )
   .action(async (options: ReportOptions) => {
     if (!isReportFormat(options.format)) {
       console.error("Invalid format. Use one of: text, markdown, json.");
@@ -50,8 +67,14 @@ program
       return;
     }
 
+    const commitOptions = await resolveCommitOptions(options);
+
+    if (!commitOptions) {
+      return;
+    }
+
     if (options.all) {
-      await printAllReposReport(options);
+      await printAllReposReport(options, commitOptions);
       return;
     }
 
@@ -62,11 +85,9 @@ program
     }
 
     const root = await getGitRoot();
-    const limit = Number.parseInt(options.limit, 10);
     const commits = await getCommits({
       cwd: root,
-      since: options.since,
-      limit: Number.isFinite(limit) ? limit : 50,
+      ...commitOptions,
     });
     const digest = buildDigest(commits);
     await printAndMaybeSaveReport(
@@ -79,6 +100,7 @@ program
       },
       options.format,
       options.save,
+      options.color,
     );
   });
 
@@ -90,6 +112,22 @@ program
   .option("--style <style>", "Post style: humble, punchy, or technical", "humble")
   .option("--model <model>", "Groq model to use", "llama-3.3-70b-versatile")
   .option("--all", "Scan all repositories under configured machine-wide roots")
+  .option("--author <pattern>", "Only include commits matching this git author pattern")
+  .option("--mine", "Only include commits by the configured git user")
+  .option("--exclude-merges", "Exclude merge commits")
+  .option("--exclude-bots", "Exclude common bot authors")
+  .option("--dry-run-prompt", "Print the prompt that would be sent to Groq without calling Groq")
+  .option("--save [path]", "Save the generated post. Optionally provide an output path")
+  .addHelpText(
+    "after",
+    `
+
+Examples:
+  $ commitlens post --style humble
+  $ commitlens post --all --exclude-bots
+  $ commitlens post --dry-run-prompt
+`,
+  )
   .action(
     async (options: {
       since: string;
@@ -97,32 +135,29 @@ program
       style: LinkedInPostStyle;
       model: string;
       all?: boolean;
+      author?: string;
+      mine?: boolean;
+      excludeMerges?: boolean;
+      excludeBots?: boolean;
+      dryRunPrompt?: boolean;
+      save?: string | boolean;
     }) => {
-      const apiKey = await resolveGroqApiKey();
-
-      if (!apiKey) {
-        console.error("Missing Groq API key.");
-        console.error("Save it permanently:");
-        console.error("npm.cmd run dev -- config set-groq-key your_groq_api_key");
-        console.error("");
-        console.error("Or set it for this PowerShell session:");
-        console.error('$env:GROQ_API_KEY="your_groq_api_key"');
-        process.exitCode = 1;
-        return;
-      }
-
       if (!isLinkedInPostStyle(options.style)) {
         console.error("Invalid style. Use one of: humble, punchy, technical.");
         process.exitCode = 1;
         return;
       }
 
-      const limit = Number.parseInt(options.limit, 10);
-      const resolvedLimit = Number.isFinite(limit) ? limit : 50;
+      const commitOptions = await resolveCommitOptions(options);
+
+      if (!commitOptions) {
+        return;
+      }
+
       let report: ReportDocument;
 
       if (options.all) {
-        const activity = await collectAllRepoActivity(options.since, resolvedLimit);
+        const activity = await collectAllRepoActivity(options.since, commitOptions);
 
         if (!activity) {
           return;
@@ -146,8 +181,7 @@ program
         const root = await getGitRoot();
         const commits = await getCommits({
           cwd: root,
-          since: options.since,
-          limit: resolvedLimit,
+          ...commitOptions,
         });
         report = {
           title: "CommitLens",
@@ -163,13 +197,44 @@ program
         style: options.style,
       });
 
-      const post = await generateWithGroq({
-        apiKey,
-        model: options.model,
-        prompt,
-      });
+      if (options.dryRunPrompt) {
+        console.log(prompt);
+        return;
+      }
 
-      console.log(post);
+      const apiKey = await resolveGroqApiKey();
+
+      if (!apiKey) {
+        printMissingGroqKeyMessage();
+        return;
+      }
+
+      console.error("CommitLens will send this digest summary to Groq to generate the post.");
+
+      try {
+        const post = await generateWithGroq({
+          apiKey,
+          model: options.model,
+          prompt,
+        });
+
+        console.log(post);
+
+        if (options.save !== undefined) {
+          const outputPath = await saveReport({
+            content: `${post}\n`,
+            format: "text",
+            outputPath: options.save,
+            filenamePrefix: "linkedin-post",
+          });
+
+          console.log("");
+          console.log(`Saved post to ${outputPath}`);
+        }
+      } catch (error) {
+        console.error(formatGroqError(error));
+        process.exitCode = 1;
+      }
     },
   );
 
@@ -205,6 +270,30 @@ config
   .action(async (path: string) => {
     const configPath = await removeRepoRoot(path);
     console.log(`Removed repo scan root. Config updated at ${configPath}`);
+  });
+
+config
+  .command("list-roots")
+  .description("List machine-wide repo scan folders")
+  .action(async () => {
+    const roots = await getRepoRoots();
+
+    if (roots.length === 0) {
+      console.log("No repo roots configured.");
+      return;
+    }
+
+    for (const root of roots) {
+      console.log(root);
+    }
+  });
+
+config
+  .command("clear-roots")
+  .description("Remove all machine-wide repo scan folders")
+  .action(async () => {
+    const configPath = await clearRepoRoots();
+    console.log(`Cleared repo scan roots. Config updated at ${configPath}`);
   });
 
 config
@@ -249,14 +338,20 @@ type ReportOptions = {
   since: string;
   limit: string;
   all?: boolean;
+  author?: string;
+  mine?: boolean;
+  excludeMerges?: boolean;
+  excludeBots?: boolean;
   format: ReportFormat;
   save?: string | boolean;
+  color?: boolean;
 };
 
-async function printAllReposReport(options: ReportOptions): Promise<void> {
-  const limit = Number.parseInt(options.limit, 10);
-  const activity = await collectAllRepoActivity(options.since, Number.isFinite(limit) ? limit : 50);
-
+async function printAllReposReport(
+  options: ReportOptions,
+  commitOptions: CommitCollectionOptions,
+): Promise<void> {
+  const activity = await collectAllRepoActivity(options.since, commitOptions);
   if (!activity) {
     return;
   }
@@ -273,12 +368,21 @@ async function printAllReposReport(options: ReportOptions): Promise<void> {
     },
     options.format,
     options.save,
+    options.color,
   );
 }
 
+type CommitCollectionOptions = {
+  since: string;
+  limit: number;
+  author?: string;
+  excludeMerges?: boolean;
+  excludeBots?: boolean;
+};
+
 async function collectAllRepoActivity(
   since: string,
-  limit: number,
+  commitOptions: CommitCollectionOptions,
 ): Promise<RepositoryActivity[] | undefined> {
   const repoRoots = await getRepoRoots();
 
@@ -300,15 +404,16 @@ async function collectAllRepoActivity(
     return undefined;
   }
 
-  return getRepositoryActivity(repositories, { since, limit });
+  return getRepositoryActivity(repositories, { ...commitOptions, since });
 }
 
 async function printAndMaybeSaveReport(
   document: ReportDocument,
   format: ReportFormat,
   savePath?: string | boolean,
+  color = true,
 ): Promise<void> {
-  const output = formatReport(document, format);
+  const output = formatReport(document, format, { color });
   console.log(output.trimEnd());
 
   if (savePath !== undefined) {
@@ -321,4 +426,54 @@ async function printAndMaybeSaveReport(
     console.log("");
     console.log(`Saved report to ${outputPath}`);
   }
+}
+
+async function resolveCommitOptions(options: {
+  since: string;
+  limit: string;
+  author?: string;
+  mine?: boolean;
+  excludeMerges?: boolean;
+  excludeBots?: boolean;
+}): Promise<CommitCollectionOptions | undefined> {
+  const limit = Number.parseInt(options.limit, 10);
+  let author = options.author;
+
+  if (options.mine) {
+    author = await getCurrentGitUser();
+
+    if (!author) {
+      console.error("Could not resolve the current git user. Set git config user.email or user.name.");
+      process.exitCode = 1;
+      return undefined;
+    }
+  }
+
+  return {
+    since: options.since,
+    limit: Number.isFinite(limit) ? limit : 50,
+    author,
+    excludeMerges: options.excludeMerges,
+    excludeBots: options.excludeBots,
+  };
+}
+
+function printMissingGroqKeyMessage(): void {
+  console.error("Missing Groq API key.");
+  console.error("Save it permanently:");
+  console.error("npm.cmd run dev -- config set-groq-key your_groq_api_key");
+  console.error("");
+  console.error("Or set it for this PowerShell session:");
+  console.error('$env:GROQ_API_KEY="your_groq_api_key"');
+  process.exitCode = 1;
+}
+
+function formatGroqError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+
+  if (message.includes("fetch failed") || message.includes("EACCES") || message.includes("ENOTFOUND")) {
+    return "Could not reach Groq. Check your internet connection, firewall, or API access.";
+  }
+
+  return `Groq request failed: ${message}`;
 }

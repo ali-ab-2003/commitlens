@@ -10,6 +10,7 @@ import {
   resolveGroqApiKey,
   addRepoRoot,
   clearGroqApiKey,
+  clearRepoRoots,
   removeRepoRoot,
   saveGroqApiKey,
 } from "../src/config.js";
@@ -62,5 +63,14 @@ describe("config", () => {
     await clearGroqApiKey(configDir);
 
     await expect(readConfig(configDir)).resolves.toEqual({});
+  });
+
+  it("clears repo roots", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "commitlens-"));
+
+    await addRepoRoot("D:\\Work", configDir);
+    await clearRepoRoots(configDir);
+
+    expect(await getRepoRoots(configDir)).toEqual([]);
   });
 });

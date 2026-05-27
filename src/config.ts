@@ -96,6 +96,18 @@ export async function removeRepoRoot(
   );
 }
 
+export async function clearRepoRoots(configDir = defaultConfigDir()): Promise<string> {
+  const currentConfig = await readConfig(configDir);
+
+  return writeConfig(
+    {
+      ...currentConfig,
+      repoRoots: [],
+    },
+    configDir,
+  );
+}
+
 export async function clearGroqApiKey(configDir = defaultConfigDir()): Promise<string> {
   const currentConfig = await readConfig(configDir);
 

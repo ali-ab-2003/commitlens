@@ -21,13 +21,20 @@ export type ActivityDigest = {
   recentHighlights: string[];
 };
 
-export function buildDigest(commits: DigestCommit[]): ActivityDigest {
+export type BuildDigestOptions = {
+  today?: string;
+};
+
+export function buildDigest(
+  commits: DigestCommit[],
+  options: BuildDigestOptions = {},
+): ActivityDigest {
   const dates = [...new Set(commits.map((commit) => commit.date))].sort();
 
   return {
     totalCommits: commits.length,
     activeDays: dates.length,
-    currentStreak: calculateCurrentStreak(dates),
+    currentStreak: calculateCurrentStreak(dates, options.today ?? getTodayDate()),
     longestStreak: calculateLongestStreak(dates),
     commitsByAuthor: countBy(commits, (commit) => commit.author),
     commitsByRepo: countBy(
@@ -39,7 +46,10 @@ export function buildDigest(commits: DigestCommit[]): ActivityDigest {
   };
 }
 
-export function buildDigestFromActivity(activity: RepositoryActivity[]): ActivityDigest {
+export function buildDigestFromActivity(
+  activity: RepositoryActivity[],
+  options: BuildDigestOptions = {},
+): ActivityDigest {
   return buildDigest(
     activity.flatMap((repo) =>
       repo.commits.map((commit) => ({
@@ -47,11 +57,18 @@ export function buildDigestFromActivity(activity: RepositoryActivity[]): Activit
         repo: repo.name,
       })),
     ),
+    options,
   );
 }
 
-function calculateCurrentStreak(sortedDates: string[]): number {
+function calculateCurrentStreak(sortedDates: string[], today: string): number {
   if (sortedDates.length === 0) {
+    return 0;
+  }
+
+  const dateSet = new Set(sortedDates);
+
+  if (!dateSet.has(today)) {
     return 0;
   }
 
@@ -150,4 +167,12 @@ function getWeekdayName(date: string): string {
 function parseDate(date: string): Date {
   const [year, month, day] = date.split("-").map(Number);
   return new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1));
+}
+
+function getTodayDate(): string {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
