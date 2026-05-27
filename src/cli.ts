@@ -34,7 +34,7 @@ import { resolveSinceOption } from "./presets.js";
 const program = new Command();
 
 program
-  .name("commitlens")
+  .name("devbrief")
   .description("Offline local Git repository activity digest and streak reporter")
   .version("0.1.0");
 
@@ -58,9 +58,9 @@ program
     `
 
 Examples:
-  $ commitlens report --since "7 days ago"
-  $ commitlens report --all --exclude-bots
-  $ commitlens report --author "Ali Abdullah" --format markdown --save
+  $ devbrief report --since "7 days ago"
+  $ devbrief report --all --exclude-bots
+  $ devbrief report --author "Ali Abdullah" --format markdown --save
 `,
   )
   .action(async (options: ReportOptions) => {
@@ -90,7 +90,7 @@ Examples:
     }
 
     if (!(await isGitRepository())) {
-      console.error("commitlens must be run inside a Git repository.");
+      console.error("devbrief must be run inside a Git repository.");
       process.exitCode = 1;
       return;
     }
@@ -103,7 +103,7 @@ Examples:
     const digest = buildDigest(commits);
     await printAndMaybeSaveReport(
       {
-        title: "CommitLens",
+        title: "DevBrief",
         scope: "current repository",
         range: `since ${options.since}`,
         repo: root,
@@ -136,9 +136,9 @@ program
     `
 
 Examples:
-  $ commitlens post --style humble
-  $ commitlens post --all --exclude-bots
-  $ commitlens post --dry-run-prompt
+  $ devbrief post --style humble
+  $ devbrief post --all --exclude-bots
+  $ devbrief post --dry-run-prompt
 `,
   )
   .action(
@@ -187,7 +187,7 @@ Examples:
         }
 
         report = {
-          title: "CommitLens",
+          title: "DevBrief",
           scope: "all configured repositories",
           range: `since ${options.since}`,
           repositoriesScanned: activity.length,
@@ -196,7 +196,7 @@ Examples:
         };
       } else {
         if (!(await isGitRepository())) {
-          console.error("commitlens must be run inside a Git repository.");
+          console.error("devbrief must be run inside a Git repository.");
           process.exitCode = 1;
           return;
         }
@@ -207,7 +207,7 @@ Examples:
           ...commitOptions,
         });
         report = {
-          title: "CommitLens",
+          title: "DevBrief",
           scope: "current repository",
           range: `since ${options.since}`,
           repo: root,
@@ -232,7 +232,7 @@ Examples:
         return;
       }
 
-      console.error("CommitLens will send this digest summary to Groq to generate the post.");
+      console.error("DevBrief will send this digest summary to Groq to generate the post.");
 
       try {
         const post = await generateWithGroq({
@@ -261,7 +261,7 @@ Examples:
     },
   );
 
-const config = program.command("config").description("Manage commitlens user configuration");
+const config = program.command("config").description("Manage devbrief user configuration");
 
 config
   .command("set-groq-key <apiKey>")
@@ -273,7 +273,7 @@ config
 
 program
   .command("init [root]")
-  .description("Set up commitlens for this machine by adding a repo scan root")
+  .description("Set up devbrief for this machine by adding a repo scan root")
   .option("--current", "Use the current directory as the machine-wide scan root")
   .action(async (root: string | undefined, options: { current?: boolean }) => {
     const scanRoot = root ?? (options.current ? process.cwd() : await resolveDefaultInitRoot());
@@ -283,13 +283,13 @@ program
     console.log(`Config updated at ${configPath}`);
     console.log("");
     console.log("Try:");
-    console.log("npm.cmd run dev -- report --all --week");
-    console.log("npm.cmd run dev -- post --dry-run-prompt --all");
+    console.log("devbrief report --all --week");
+    console.log("devbrief post --dry-run-prompt --all");
   });
 
 program
   .command("doctor")
-  .description("Check local commitlens setup")
+  .description("Check local devbrief setup")
   .action(async () => {
     await printDoctorReport();
   });
@@ -407,7 +407,7 @@ async function printAllReposReport(
   const digest = buildDigestFromActivity(activity);
   await printAndMaybeSaveReport(
     {
-      title: "CommitLens",
+      title: "DevBrief",
       scope: "all configured repositories",
       range: `since ${options.since}`,
       repositoriesScanned: activity.length,
@@ -447,7 +447,7 @@ async function collectAllRepoActivity(
   if (repoRoots.length === 0) {
     console.error("No machine-wide repo roots configured.");
     console.error("Add one first, for example:");
-    console.error('npm.cmd run dev -- config add-root "D:\\Work"');
+    console.error('devbrief config add-root "D:\\Work"');
     process.exitCode = 1;
     return undefined;
   }
@@ -519,7 +519,7 @@ async function resolveCommitOptions(options: {
 function printMissingGroqKeyMessage(): void {
   console.error("Missing Groq API key.");
   console.error("Save it permanently:");
-  console.error("npm.cmd run dev -- config set-groq-key your_groq_api_key");
+  console.error("devbrief config set-groq-key your_groq_api_key");
   console.error("");
   console.error("Or set it for this PowerShell session:");
   console.error('$env:GROQ_API_KEY="your_groq_api_key"');
@@ -550,8 +550,8 @@ async function printDoctorReport(): Promise<void> {
   const inGitRepository = await isGitRepository();
   const gitUser = await getCurrentGitUser().catch(() => undefined);
 
-  console.log("CommitLens doctor");
-  console.log("=================");
+  console.log("DevBrief doctor");
+  console.log("===============");
   console.log(`Git repository: ${inGitRepository ? "ok" : "not detected"}`);
   console.log(`Git user: ${gitUser ?? "not configured"}`);
   console.log(`Config path: ${getConfigPath()}`);

@@ -51,8 +51,8 @@ export function formatTextReport(
 ): string {
   const theme = createTheme(options.color ?? true);
   const lines = [
-    theme.title("CommitLens"),
-    theme.accent("=========="),
+    theme.title(document.title),
+    theme.accent("=".repeat(document.title.length)),
     theme.dim("Offline Git activity digest"),
     "",
     formatMetaLine("Scope", document.scope, theme),
@@ -107,7 +107,7 @@ export function formatTextReport(
 
 export function formatMarkdownReport(document: ReportDocument): string {
   const lines = [
-    "# CommitLens",
+    `# ${document.title}`,
     "",
     "Offline Git activity digest.",
     "",
@@ -180,7 +180,7 @@ function resolveOutputPath(
 
   const extension = format === "markdown" ? "md" : format;
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return resolve(join("commitlens-reports", `${filenamePrefix}-${timestamp}.${extension}`));
+  return resolve(join("devbrief-reports", `${filenamePrefix}-${timestamp}.${extension}`));
 }
 
 function appendCountSection(

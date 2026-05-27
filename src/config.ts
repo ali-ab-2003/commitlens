@@ -136,7 +136,7 @@ export function maskSecret(secret: string): string {
 }
 
 function defaultConfigDir(): string {
-  return process.env.COMMITLENS_CONFIG_DIR ?? join(homedir(), ".commitlens");
+  return process.env.DEVBRIEF_CONFIG_DIR ?? process.env.COMMITLENS_CONFIG_DIR ?? join(homedir(), ".devbrief");
 }
 
 function isMissingFileError(error: unknown): boolean {

@@ -32,7 +32,7 @@ export function buildLinkedInPostPrompt(input: LinkedInPostInput): string {
     .join("\n");
 
   return [
-    "Write a LinkedIn post from this local Git activity report.",
+    "Write a LinkedIn post from this local development activity report.",
     "",
     "Rules:",
     "- Sound natural and professional.",
