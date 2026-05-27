@@ -38,32 +38,32 @@ export function formatReport(document: ReportDocument, format: ReportFormat): st
 
 export function formatTextReport(document: ReportDocument): string {
   const lines = [
-    chalk.bold("CommitLens"),
-    chalk.dim("----------"),
+    chalk.bold.cyan("CommitLens"),
+    chalk.cyan("=========="),
     chalk.dim("Offline Git activity digest"),
     "",
-    `${chalk.dim("Scope:")} ${document.scope}`,
-    `${chalk.dim("Range:")} ${document.range}`,
+    formatMetaLine("Scope", document.scope),
+    formatMetaLine("Range", document.range),
   ];
 
   if (document.repo) {
-    lines.push(`${chalk.dim("Repo:")} ${document.repo}`);
+    lines.push(formatMetaLine("Repo", document.repo));
   }
 
   if (document.repositoriesScanned !== undefined) {
-    lines.push(`${chalk.dim("Repositories scanned:")} ${document.repositoriesScanned}`);
+    lines.push(formatMetaLine("Repositories scanned", String(document.repositoriesScanned)));
   }
 
   lines.push(
     "",
-    chalk.bold("Summary"),
+    formatSectionTitle("Summary"),
     `  ${formatNumber(document.digest.totalCommits)} ${pluralize(document.digest.totalCommits, "commit")} across ${formatNumber(document.digest.activeDays)} ${pluralize(document.digest.activeDays, "active day")}`,
-    `  Current streak: ${formatDays(document.digest.currentStreak)}`,
-    `  Longest streak: ${formatDays(document.digest.longestStreak)}`,
+    formatStatLine("Current streak", formatDays(document.digest.currentStreak)),
+    formatStatLine("Longest streak", formatDays(document.digest.longestStreak)),
   );
 
   if (document.digest.mostActiveDay) {
-    lines.push(`  Most active day: ${document.digest.mostActiveDay.name}`);
+    lines.push(formatStatLine("Most active day", document.digest.mostActiveDay.name));
   }
 
   appendCountSection(lines, "Top authors", document.digest.commitsByAuthor);
@@ -73,13 +73,18 @@ export function formatTextReport(document: ReportDocument): string {
   const activeRepos = document.repositories?.filter((repo) => repo.commits.length > 0) ?? [];
 
   if (activeRepos.length > 0) {
-    lines.push("", chalk.bold("Repo details"));
+    lines.push("", formatSectionTitle("Repo details"));
 
     for (const repo of activeRepos) {
-      lines.push("", `${repo.name}: ${repo.commits.length} ${pluralize(repo.commits.length, "commit")}`);
+      lines.push(
+        "",
+        `${chalk.bold(repo.name)} ${chalk.dim("-")} ${repo.commits.length} ${pluralize(repo.commits.length, "commit")}`,
+      );
 
       for (const commit of repo.commits.slice(0, 5)) {
-        lines.push(`  - ${commit.date} ${commit.hash} ${commit.subject} (${commit.author})`);
+        lines.push(
+          `  ${chalk.dim(commit.date)} ${chalk.yellow(commit.hash)} ${commit.subject} ${chalk.dim(`(${commit.author})`)}`,
+        );
       }
     }
   }
@@ -166,10 +171,10 @@ function appendCountSection(lines: string[], title: string, items: CountItem[]):
     return;
   }
 
-  lines.push("", chalk.bold(title));
+  lines.push("", formatSectionTitle(title));
 
   for (const item of items.slice(0, 5)) {
-    lines.push(`  ${item.name.padEnd(24)} ${item.count}`);
+    lines.push(formatStatLine(item.name, `${item.count}`));
   }
 }
 
@@ -178,11 +183,23 @@ function appendListSection(lines: string[], title: string, items: string[]): voi
     return;
   }
 
-  lines.push("", chalk.bold(title));
+  lines.push("", formatSectionTitle(title));
 
   for (const item of items) {
-    lines.push(`  - ${item}`);
+    lines.push(`  ${chalk.dim("-")} ${item}`);
   }
+}
+
+function formatMetaLine(label: string, value: string): string {
+  return `${chalk.dim(`${label}:`.padEnd(23))} ${value}`;
+}
+
+function formatSectionTitle(title: string): string {
+  return chalk.bold.cyan(title);
+}
+
+function formatStatLine(label: string, value: string): string {
+  return `  ${chalk.dim(label.padEnd(21))} ${value}`;
 }
 
 function appendMarkdownCountSection(lines: string[], title: string, items: CountItem[]): void {
