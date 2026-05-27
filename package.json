@@ -3,16 +3,31 @@
   "version": "0.1.0",
   "description": "Offline local Git repository activity digest and streak reporter",
   "main": "dist/cli.js",
+  "types": "dist/cli.d.ts",
   "scripts": {
     "test": "vitest run",
     "build": "tsc",
     "dev": "tsx src/cli.ts",
-    "report": "npm run build && node dist/cli.js report"
+    "report": "npm run build && node dist/cli.js report",
+    "prepublishOnly": "npm run build && npm test",
+    "pack:check": "npm run build && npm pack --dry-run"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "git",
+    "cli",
+    "developer-tools",
+    "activity",
+    "streak",
+    "digest",
+    "offline",
+    "groq"
+  ],
+  "author": "Ali Abdullah",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "bin": {
     "commitlens": "dist/cli.js"
   },
@@ -27,5 +42,21 @@
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ali-ab-2003/commitlens.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ali-ab-2003/commitlens/issues"
+  },
+  "homepage": "https://github.com/ali-ab-2003/commitlens#readme",
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
   }
 }

@@ -29,6 +29,7 @@ import {
   type RepositoryActivity,
 } from "./git.js";
 import { buildLinkedInPostPrompt, type LinkedInPostStyle } from "./linkedin.js";
+import { resolveSinceOption } from "./presets.js";
 
 const program = new Command();
 
@@ -41,6 +42,8 @@ program
   .command("report")
   .description("Generate a local activity report for the current Git repository")
   .option("-s, --since <date>", "Only include commits since this date", "30 days ago")
+  .option("--week", "Shortcut for --since \"7 days ago\"")
+  .option("--month", "Shortcut for --since \"30 days ago\"")
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
   .option("--all", "Scan all repositories under configured machine-wide roots")
   .option("--author <pattern>", "Only include commits matching this git author pattern")
@@ -61,6 +64,14 @@ Examples:
 `,
   )
   .action(async (options: ReportOptions) => {
+    const since = resolveSinceOrFail(options);
+
+    if (!since) {
+      return;
+    }
+
+    options.since = since;
+
     if (!isReportFormat(options.format)) {
       console.error("Invalid format. Use one of: text, markdown, json.");
       process.exitCode = 1;
@@ -108,6 +119,8 @@ program
   .command("post")
   .description("Generate a LinkedIn post from the local Git activity report using Groq")
   .option("-s, --since <date>", "Only include commits since this date", "30 days ago")
+  .option("--week", "Shortcut for --since \"7 days ago\"")
+  .option("--month", "Shortcut for --since \"30 days ago\"")
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
   .option("--style <style>", "Post style: humble, punchy, or technical", "humble")
   .option("--model <model>", "Groq model to use", "llama-3.3-70b-versatile")
@@ -141,7 +154,17 @@ Examples:
       excludeBots?: boolean;
       dryRunPrompt?: boolean;
       save?: string | boolean;
+      week?: boolean;
+      month?: boolean;
     }) => {
+      const since = resolveSinceOrFail(options);
+
+      if (!since) {
+        return;
+      }
+
+      options.since = since;
+
       if (!isLinkedInPostStyle(options.style)) {
         console.error("Invalid style. Use one of: humble, punchy, technical.");
         process.exitCode = 1;
@@ -248,6 +271,29 @@ config
     console.log(`Saved Groq API key to ${configPath}`);
   });
 
+program
+  .command("init [root]")
+  .description("Set up commitlens for this machine by adding a repo scan root")
+  .option("--current", "Use the current directory as the machine-wide scan root")
+  .action(async (root: string | undefined, options: { current?: boolean }) => {
+    const scanRoot = root ?? (options.current ? process.cwd() : await resolveDefaultInitRoot());
+    const configPath = await addRepoRoot(scanRoot);
+
+    console.log(`Added repo scan root: ${scanRoot}`);
+    console.log(`Config updated at ${configPath}`);
+    console.log("");
+    console.log("Try:");
+    console.log("npm.cmd run dev -- report --all --week");
+    console.log("npm.cmd run dev -- post --dry-run-prompt --all");
+  });
+
+program
+  .command("doctor")
+  .description("Check local commitlens setup")
+  .action(async () => {
+    await printDoctorReport();
+  });
+
 config
   .command("clear-groq-key")
   .description("Remove the saved Groq API key from user configuration")
@@ -338,6 +384,8 @@ type ReportOptions = {
   since: string;
   limit: string;
   all?: boolean;
+  week?: boolean;
+  month?: boolean;
   author?: string;
   mine?: boolean;
   excludeMerges?: boolean;
@@ -370,6 +418,16 @@ async function printAllReposReport(
     options.save,
     options.color,
   );
+}
+
+function resolveSinceOrFail(options: { since: string; week?: boolean; month?: boolean }): string | undefined {
+  try {
+    return resolveSinceOption(options);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return undefined;
+  }
 }
 
 type CommitCollectionOptions = {
@@ -476,4 +534,33 @@ function formatGroqError(error: unknown): string {
   }
 
   return `Groq request failed: ${message}`;
+}
+
+async function resolveDefaultInitRoot(): Promise<string> {
+  if (await isGitRepository()) {
+    return getGitRoot();
+  }
+
+  return process.cwd();
+}
+
+async function printDoctorReport(): Promise<void> {
+  const config = await readConfig();
+  const apiKey = await resolveGroqApiKey();
+  const inGitRepository = await isGitRepository();
+  const gitUser = await getCurrentGitUser().catch(() => undefined);
+
+  console.log("CommitLens doctor");
+  console.log("=================");
+  console.log(`Git repository: ${inGitRepository ? "ok" : "not detected"}`);
+  console.log(`Git user: ${gitUser ?? "not configured"}`);
+  console.log(`Config path: ${getConfigPath()}`);
+  console.log(`Groq API key: ${apiKey ? "configured" : "not configured"}`);
+  console.log(`Repo roots: ${config.repoRoots?.length ?? 0}`);
+
+  if (config.repoRoots?.length) {
+    for (const root of config.repoRoots) {
+      console.log(`- ${root}`);
+    }
+  }
 }

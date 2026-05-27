@@ -1,57 +1,101 @@
 # commitlens
 
-Offline local Git repository activity digest and streak reporter.
+Offline Git activity reports for your local machine. Scan one repo or every repo under folders you configure, see streaks and highlights, and optionally generate a LinkedIn post with Groq.
+
+## Install
 
 ```powershell
-npm run dev -- report
+npm install -g commitlens
 ```
 
-Save a Groq API key permanently for LinkedIn post generation:
+For local development:
 
 ```powershell
-npm.cmd run dev -- config set-groq-key your_groq_api_key
-npm.cmd run dev -- config show
-npm.cmd run dev -- post
+npm.cmd install
+npm.cmd run build
+npm.cmd run dev -- report
 ```
 
-Scan all repos under folders you configure:
+## Quick Start
+
+Run inside any Git repository:
 
 ```powershell
-npm.cmd run dev -- config add-root "D:\Work"
-npm.cmd run dev -- report --all
-npm.cmd run dev -- post --all
+commitlens report
+commitlens report --week
+commitlens report --month
 ```
 
-Choose an output format and save a copy:
+Configure machine-wide scanning:
 
 ```powershell
-npm.cmd run dev -- report --format text
-npm.cmd run dev -- report --format markdown
-npm.cmd run dev -- report --format json
-npm.cmd run dev -- report --format markdown --save commitlens-reports\latest.md
-npm.cmd run dev -- report --all --format json --save
+commitlens init "D:\Work"
+commitlens report --all --week
+```
+
+Check setup:
+
+```powershell
+commitlens doctor
+```
+
+## Reports
+
+```powershell
+commitlens report --format text
+commitlens report --format markdown
+commitlens report --format json
+commitlens report --format markdown --save commitlens-reports\latest.md
+commitlens report --all --format json --save
 ```
 
 Filter report data:
 
 ```powershell
-npm.cmd run dev -- report --mine
-npm.cmd run dev -- report --author "Your Name"
-npm.cmd run dev -- report --exclude-merges --exclude-bots
-npm.cmd run dev -- report --no-color
+commitlens report --mine
+commitlens report --author "Your Name"
+commitlens report --exclude-merges --exclude-bots
+commitlens report --no-color
 ```
 
-Inspect or save AI post output:
+## LinkedIn Posts
+
+Save a Groq API key once:
 
 ```powershell
-npm.cmd run dev -- post --dry-run-prompt
-npm.cmd run dev -- post --style technical --save
-npm.cmd run dev -- post --all --exclude-bots --save commitlens-reports\linkedin-post.txt
+commitlens config set-groq-key your_groq_api_key
+commitlens config show
 ```
 
-Manage machine-wide repo roots:
+Generate or inspect a post:
 
 ```powershell
-npm.cmd run dev -- config list-roots
-npm.cmd run dev -- config clear-roots
+commitlens post
+commitlens post --style technical
+commitlens post --dry-run-prompt
+commitlens post --all --exclude-bots --save commitlens-reports\linkedin-post.txt
+```
+
+Using `post` sends a digest summary to Groq. Git history scanning stays local.
+
+## Config
+
+```powershell
+commitlens config add-root "D:\Work"
+commitlens config list-roots
+commitlens config remove-root "D:\Work"
+commitlens config clear-roots
+commitlens config clear-groq-key
+commitlens config path
+```
+
+Config is stored in your user profile at `.commitlens\config.json`.
+
+## Development
+
+```powershell
+npm.cmd run build
+npm.cmd test
+npm.cmd run dev -- report
+npm.cmd pack:check
 ```
