@@ -1,18 +1,34 @@
-import type { CommitSummary } from "./parser.js";
+import type { ReportDocument } from "./format.js";
 
 export type LinkedInPostStyle = "humble" | "punchy" | "technical";
 
 export type LinkedInPostInput = {
-  repo: string;
-  since: string;
-  commits: CommitSummary[];
+  report: ReportDocument;
   style: LinkedInPostStyle;
 };
 
 export function buildLinkedInPostPrompt(input: LinkedInPostInput): string {
-  const commitLines = input.commits
-    .slice(0, 20)
-    .map((commit) => `- ${commit.date}: ${commit.subject}`)
+  const { report } = input;
+  const highlights = report.digest.recentHighlights.map((highlight) => `- ${highlight}`).join("\n");
+  const topAuthors = report.digest.commitsByAuthor
+    .slice(0, 5)
+    .map((author) => `- ${author.name}: ${author.count}`)
+    .join("\n");
+  const topRepos = report.digest.commitsByRepo
+    .slice(0, 5)
+    .map((repo) => `- ${repo.name}: ${repo.count}`)
+    .join("\n");
+  const repoDetails = (report.repositories ?? [])
+    .filter((repo) => repo.commits.length > 0)
+    .slice(0, 5)
+    .map((repo) => {
+      const commits = repo.commits
+        .slice(0, 3)
+        .map((commit) => `  - ${commit.date}: ${commit.subject}`)
+        .join("\n");
+
+      return `- ${repo.name}: ${repo.commits.length} commits\n${commits}`;
+    })
     .join("\n");
 
   return [
@@ -32,11 +48,34 @@ export function buildLinkedInPostPrompt(input: LinkedInPostInput): string {
     "- End with a grounded reflection about consistency or learning.",
     "",
     `Tone: ${input.style}`,
-    `Repository path/name: ${input.repo}`,
-    `Range: since ${input.since}`,
-    `Commit count: ${input.commits.length}`,
+    `Scope: ${report.scope}`,
+    `Range: ${report.range}`,
+    report.repo ? `Repository path/name: ${report.repo}` : undefined,
+    report.repositoriesScanned !== undefined
+      ? `Repositories scanned: ${report.repositoriesScanned}`
+      : undefined,
     "",
-    "Recent commits:",
-    commitLines || "- No commits found in this range.",
-  ].join("\n");
+    "Digest:",
+    `- Total commits: ${report.digest.totalCommits}`,
+    `- Active days: ${report.digest.activeDays}`,
+    `- Current streak: ${report.digest.currentStreak} days`,
+    `- Longest streak: ${report.digest.longestStreak} days`,
+    report.digest.mostActiveDay
+      ? `- Most active day: ${report.digest.mostActiveDay.name}`
+      : undefined,
+    "",
+    "Top authors:",
+    topAuthors || "- None",
+    "",
+    "Top repositories:",
+    topRepos || "- Not applicable",
+    "",
+    "Recent highlights:",
+    highlights || "- No commits found in this range.",
+    "",
+    "Repository details:",
+    repoDetails || "- Not applicable",
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join("\n");
 }

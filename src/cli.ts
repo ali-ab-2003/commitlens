@@ -119,8 +119,7 @@ program
 
       const limit = Number.parseInt(options.limit, 10);
       const resolvedLimit = Number.isFinite(limit) ? limit : 50;
-      let root = "";
-      let commits;
+      let report: ReportDocument;
 
       if (options.all) {
         const activity = await collectAllRepoActivity(options.since, resolvedLimit);
@@ -129,13 +128,14 @@ program
           return;
         }
 
-        root = "all configured repositories";
-        commits = activity.flatMap((repo) =>
-          repo.commits.map((commit) => ({
-            ...commit,
-            subject: `[${repo.name}] ${commit.subject}`,
-          })),
-        );
+        report = {
+          title: "CommitLens",
+          scope: "all configured repositories",
+          range: `since ${options.since}`,
+          repositoriesScanned: activity.length,
+          digest: buildDigestFromActivity(activity),
+          repositories: activity.filter((repo) => repo.commits.length > 0),
+        };
       } else {
         if (!(await isGitRepository())) {
           console.error("commitlens must be run inside a Git repository.");
@@ -143,18 +143,23 @@ program
           return;
         }
 
-        root = await getGitRoot();
-        commits = await getCommits({
+        const root = await getGitRoot();
+        const commits = await getCommits({
           cwd: root,
           since: options.since,
           limit: resolvedLimit,
         });
+        report = {
+          title: "CommitLens",
+          scope: "current repository",
+          range: `since ${options.since}`,
+          repo: root,
+          digest: buildDigest(commits),
+        };
       }
 
       const prompt = buildLinkedInPostPrompt({
-        repo: root,
-        since: options.since,
-        commits,
+        report,
         style: options.style,
       });
 
