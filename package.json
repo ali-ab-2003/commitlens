@@ -1,5 +1,5 @@
 {
-  "name": "commitlens",
+  "name": "DevBrief",
   "version": "0.1.0",
   "description": "Offline local Git repository activity digest and streak reporter",
   "main": "dist/cli.js",
