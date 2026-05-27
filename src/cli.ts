@@ -265,7 +265,7 @@ const config = program.command("config").description("Manage devbrief user confi
 
 config
   .command("set-groq-key <apiKey>")
-  .description("Save a Groq API key for future commitlens post commands")
+  .description("Save a Groq API key for future devbrief post commands")
   .action(async (apiKey: string) => {
     const configPath = await saveGroqApiKey(apiKey);
     console.log(`Saved Groq API key to ${configPath}`);
@@ -344,7 +344,7 @@ config
 
 config
   .command("show")
-  .description("Show configured commitlens settings without revealing secrets")
+  .description("Show configured devbrief settings without revealing secrets")
   .action(async () => {
     const configPath = getConfigPath();
     const currentConfig = await readConfig();
@@ -369,7 +369,7 @@ config
 
 config
   .command("path")
-  .description("Print the commitlens config file path")
+  .description("Print the devbrief config file path")
   .action(() => {
     console.log(getConfigPath());
   });

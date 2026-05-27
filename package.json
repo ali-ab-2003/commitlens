@@ -1,6 +1,6 @@
 {
   "name": "devbrief",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Offline local Git repository activity digest and streak reporter",
   "main": "dist/cli.js",
   "types": "dist/cli.d.ts",
@@ -45,12 +45,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ali-ab-2003/commitlens.git"
+    "url": "git+https://github.com/ali-ab-2003/devbrief.git"
   },
   "bugs": {
-    "url": "https://github.com/ali-ab-2003/commitlens/issues"
+    "url": "https://github.com/ali-ab-2003/devbrief/issues"
   },
-  "homepage": "https://github.com/ali-ab-2003/commitlens#readme",
+  "homepage": "https://github.com/ali-ab-2003/devbrief#readme",
   "files": [
     "dist",
     "README.md",

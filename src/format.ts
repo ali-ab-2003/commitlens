@@ -172,7 +172,7 @@ export function isReportFormat(format: string): format is ReportFormat {
 function resolveOutputPath(
   outputPath: string | boolean | undefined,
   format: ReportFormat,
-  filenamePrefix = "commitlens-report",
+  filenamePrefix = "devbrief-report",
 ): string {
   if (typeof outputPath === "string") {
     return resolve(outputPath);
