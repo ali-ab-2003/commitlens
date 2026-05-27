@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 export type CommitlensConfig = {
   groqApiKey?: string;
+  repoRoots?: string[];
 };
 
 export function getConfigPath(configDir = defaultConfigDir()): string {
@@ -27,12 +28,48 @@ export async function saveGroqApiKey(
   groqApiKey: string,
   configDir = defaultConfigDir(),
 ): Promise<string> {
-  const configPath = getConfigPath(configDir);
   const currentConfig = await readConfig(configDir);
+  return writeConfig(
+    {
+      ...currentConfig,
+      groqApiKey,
+    },
+    configDir,
+  );
+}
+
+export async function addRepoRoot(repoRoot: string, configDir = defaultConfigDir()): Promise<string> {
+  const currentConfig = await readConfig(configDir);
+  const normalizedRoot = resolve(repoRoot);
+  const repoRoots = new Set(currentConfig.repoRoots ?? []);
+  repoRoots.add(normalizedRoot);
+
+  return writeConfig(
+    {
+      ...currentConfig,
+      repoRoots: [...repoRoots].sort(),
+    },
+    configDir,
+  );
+}
+
+export async function getRepoRoots(configDir = defaultConfigDir()): Promise<string[]> {
+  return (await readConfig(configDir)).repoRoots ?? [];
+}
+
+async function writeConfig(config: CommitlensConfig, configDir = defaultConfigDir()): Promise<string> {
+  const configPath = getConfigPath(configDir);
   const nextConfig: CommitlensConfig = {
-    ...currentConfig,
-    groqApiKey,
+    ...config,
   };
+
+  if (nextConfig.repoRoots?.length === 0) {
+    delete nextConfig.repoRoots;
+  }
+
+  if (!nextConfig.groqApiKey) {
+    delete nextConfig.groqApiKey;
+  }
 
   await mkdir(dirname(configPath), { recursive: true });
   await writeFile(configPath, `${JSON.stringify(nextConfig, null, 2)}\n`, {
@@ -41,6 +78,34 @@ export async function saveGroqApiKey(
   });
 
   return configPath;
+}
+
+export async function removeRepoRoot(
+  repoRoot: string,
+  configDir = defaultConfigDir(),
+): Promise<string> {
+  const currentConfig = await readConfig(configDir);
+  const normalizedRoot = resolve(repoRoot);
+
+  return writeConfig(
+    {
+      ...currentConfig,
+      repoRoots: (currentConfig.repoRoots ?? []).filter((root) => root !== normalizedRoot),
+    },
+    configDir,
+  );
+}
+
+export async function clearGroqApiKey(configDir = defaultConfigDir()): Promise<string> {
+  const currentConfig = await readConfig(configDir);
+
+  return writeConfig(
+    {
+      ...currentConfig,
+      groqApiKey: undefined,
+    },
+    configDir,
+  );
 }
 
 export async function resolveGroqApiKey(

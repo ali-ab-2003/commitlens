@@ -2,8 +2,25 @@
 
 import { Command } from "commander";
 import { generateWithGroq } from "./ai.js";
-import { getConfigPath, maskSecret, readConfig, resolveGroqApiKey, saveGroqApiKey } from "./config.js";
-import { getCommits, getGitRoot, isGitRepository } from "./git.js";
+import {
+  addRepoRoot,
+  clearGroqApiKey,
+  getConfigPath,
+  getRepoRoots,
+  maskSecret,
+  readConfig,
+  removeRepoRoot,
+  resolveGroqApiKey,
+  saveGroqApiKey,
+} from "./config.js";
+import {
+  findGitRepositories,
+  getCommits,
+  getGitRoot,
+  getRepositoryActivity,
+  isGitRepository,
+  type RepositoryActivity,
+} from "./git.js";
 import { buildLinkedInPostPrompt, type LinkedInPostStyle } from "./linkedin.js";
 
 const program = new Command();
@@ -18,7 +35,13 @@ program
   .description("Generate a local activity report for the current Git repository")
   .option("-s, --since <date>", "Only include commits since this date", "30 days ago")
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
-  .action(async (options: { since: string; limit: string }) => {
+  .option("--all", "Scan all repositories under configured machine-wide roots")
+  .action(async (options: { since: string; limit: string; all?: boolean }) => {
+    if (options.all) {
+      await printAllReposReport(options);
+      return;
+    }
+
     if (!(await isGitRepository())) {
       console.error("commitlens must be run inside a Git repository.");
       process.exitCode = 1;
@@ -50,12 +73,14 @@ program
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
   .option("--style <style>", "Post style: humble, punchy, or technical", "humble")
   .option("--model <model>", "Groq model to use", "llama-3.3-70b-versatile")
+  .option("--all", "Scan all repositories under configured machine-wide roots")
   .action(
     async (options: {
       since: string;
       limit: string;
       style: LinkedInPostStyle;
       model: string;
+      all?: boolean;
     }) => {
       const apiKey = await resolveGroqApiKey();
 
@@ -70,25 +95,45 @@ program
         return;
       }
 
-      if (!(await isGitRepository())) {
-        console.error("commitlens must be run inside a Git repository.");
-        process.exitCode = 1;
-        return;
-      }
-
       if (!isLinkedInPostStyle(options.style)) {
         console.error("Invalid style. Use one of: humble, punchy, technical.");
         process.exitCode = 1;
         return;
       }
 
-      const root = await getGitRoot();
       const limit = Number.parseInt(options.limit, 10);
-      const commits = await getCommits({
-        cwd: root,
-        since: options.since,
-        limit: Number.isFinite(limit) ? limit : 50,
-      });
+      const resolvedLimit = Number.isFinite(limit) ? limit : 50;
+      let root = "";
+      let commits;
+
+      if (options.all) {
+        const activity = await collectAllRepoActivity(options.since, resolvedLimit);
+
+        if (!activity) {
+          return;
+        }
+
+        root = "all configured repositories";
+        commits = activity.flatMap((repo) =>
+          repo.commits.map((commit) => ({
+            ...commit,
+            subject: `[${repo.name}] ${commit.subject}`,
+          })),
+        );
+      } else {
+        if (!(await isGitRepository())) {
+          console.error("commitlens must be run inside a Git repository.");
+          process.exitCode = 1;
+          return;
+        }
+
+        root = await getGitRoot();
+        commits = await getCommits({
+          cwd: root,
+          since: options.since,
+          limit: resolvedLimit,
+        });
+      }
 
       const prompt = buildLinkedInPostPrompt({
         repo: root,
@@ -118,6 +163,30 @@ config
   });
 
 config
+  .command("clear-groq-key")
+  .description("Remove the saved Groq API key from user configuration")
+  .action(async () => {
+    const configPath = await clearGroqApiKey();
+    console.log(`Removed saved Groq API key from ${configPath}`);
+  });
+
+config
+  .command("add-root <path>")
+  .description("Add a machine-wide folder to scan for Git repositories")
+  .action(async (path: string) => {
+    const configPath = await addRepoRoot(path);
+    console.log(`Added repo scan root. Config updated at ${configPath}`);
+  });
+
+config
+  .command("remove-root <path>")
+  .description("Remove a machine-wide repo scan folder")
+  .action(async (path: string) => {
+    const configPath = await removeRepoRoot(path);
+    console.log(`Removed repo scan root. Config updated at ${configPath}`);
+  });
+
+config
   .command("show")
   .description("Show configured commitlens settings without revealing secrets")
   .action(async () => {
@@ -130,6 +199,15 @@ config
         currentConfig.groqApiKey ? maskSecret(currentConfig.groqApiKey) : "not set"
       }`,
     );
+    console.log("repoRoots:");
+    for (const root of currentConfig.repoRoots ?? []) {
+      console.log(`- ${root}`);
+    }
+
+    if (!currentConfig.repoRoots?.length) {
+      console.log("- not set");
+    }
+
     console.log(`GROQ_API_KEY env override: ${process.env.GROQ_API_KEY ? "set" : "not set"}`);
   });
 
@@ -144,4 +222,57 @@ program.parse();
 
 function isLinkedInPostStyle(style: string): style is LinkedInPostStyle {
   return style === "humble" || style === "punchy" || style === "technical";
+}
+
+async function printAllReposReport(options: { since: string; limit: string }): Promise<void> {
+  const limit = Number.parseInt(options.limit, 10);
+  const activity = await collectAllRepoActivity(options.since, Number.isFinite(limit) ? limit : 50);
+
+  if (!activity) {
+    return;
+  }
+
+  const totalCommits = activity.reduce((sum, repo) => sum + repo.commits.length, 0);
+
+  console.log("commitlens report");
+  console.log("scope: all configured repositories");
+  console.log(`range: since ${options.since}`);
+  console.log(`repositories: ${activity.length}`);
+  console.log(`commits: ${totalCommits}`);
+
+  for (const repo of activity) {
+    console.log("");
+    console.log(`${repo.name}: ${repo.commits.length} commits`);
+
+    for (const commit of repo.commits.slice(0, 5)) {
+      console.log(`- ${commit.date} ${commit.hash} ${commit.subject} (${commit.author})`);
+    }
+  }
+}
+
+async function collectAllRepoActivity(
+  since: string,
+  limit: number,
+): Promise<RepositoryActivity[] | undefined> {
+  const repoRoots = await getRepoRoots();
+
+  if (repoRoots.length === 0) {
+    console.error("No machine-wide repo roots configured.");
+    console.error("Add one first, for example:");
+    console.error('npm.cmd run dev -- config add-root "D:\\Work"');
+    process.exitCode = 1;
+    return undefined;
+  }
+
+  const repositories = (
+    await Promise.all(repoRoots.map((root) => findGitRepositories(root)))
+  ).flat();
+
+  if (repositories.length === 0) {
+    console.error("No Git repositories found under configured roots.");
+    process.exitCode = 1;
+    return undefined;
+  }
+
+  return getRepositoryActivity(repositories, { since, limit });
 }

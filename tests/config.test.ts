@@ -4,9 +4,13 @@ import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import {
   getConfigPath,
+  getRepoRoots,
   maskSecret,
   readConfig,
   resolveGroqApiKey,
+  addRepoRoot,
+  clearGroqApiKey,
+  removeRepoRoot,
   saveGroqApiKey,
 } from "../src/config.js";
 
@@ -39,5 +43,24 @@ describe("config", () => {
 
   it("masks secrets for display", () => {
     expect(maskSecret("gsk_1234567890")).toBe("gsk_******7890");
+  });
+
+  it("adds and removes repo roots", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "commitlens-"));
+
+    await addRepoRoot("D:\\Work", configDir);
+    expect(await getRepoRoots(configDir)).toEqual(["D:\\Work"]);
+
+    await removeRepoRoot("D:\\Work", configDir);
+    expect(await getRepoRoots(configDir)).toEqual([]);
+  });
+
+  it("clears a saved Groq API key", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "commitlens-"));
+
+    await saveGroqApiKey("gsk_test_key", configDir);
+    await clearGroqApiKey(configDir);
+
+    await expect(readConfig(configDir)).resolves.toEqual({});
   });
 });
