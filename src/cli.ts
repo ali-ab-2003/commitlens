@@ -63,7 +63,7 @@ program
 Examples:
   $ devbrief report --since "7 days ago"
   $ devbrief report --all --exclude-bots
-  $ devbrief report --author "Ali Abdullah" --format markdown --save
+  $ devbrief report --author "Your Name" --format markdown --save
 `,
   )
   .action(async (options: ReportOptions) => {
@@ -450,7 +450,7 @@ async function collectAllRepoActivity(
   if (repoRoots.length === 0) {
     console.error("No machine-wide repo roots configured.");
     console.error("Add one first, for example:");
-    console.error('devbrief config add-root "D:\\Work"');
+    console.error('devbrief config add-root "C:\\Users\\You\\Projects"');
     process.exitCode = 1;
     return undefined;
   }

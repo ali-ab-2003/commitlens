@@ -43,7 +43,7 @@ Offline Git activity digest
 
 Scope:                  current repository
 Range:                  since 7 days ago
-Repo:                   D:/Work/Practice Projects/devbrief
+Repo:                   C:/Users/You/Projects/devbrief
 
 Summary
   12 commits across 3 active days
@@ -52,7 +52,7 @@ Summary
   Most active day       Wednesday
 
 Top authors
-  Ali Abdullah          12
+  Your Name             12
 
 Recent highlights
   - Add report export formats
@@ -65,7 +65,7 @@ Recent highlights
 Add a folder that contains your projects:
 
 ```powershell
-devbrief init "D:\Work"
+devbrief init "C:\Users\You\Projects"
 ```
 
 Then scan every Git repo under that folder:
@@ -77,9 +77,9 @@ devbrief report --all --week
 Manage scan roots:
 
 ```powershell
-devbrief config add-root "D:\Work"
+devbrief config add-root "C:\Users\You\Projects"
 devbrief config list-roots
-devbrief config remove-root "D:\Work"
+devbrief config remove-root "C:\Users\You\Projects"
 devbrief config clear-roots
 ```
 
@@ -208,8 +208,8 @@ devbrief config --help
 ## Development
 
 ```powershell
-git clone https://github.com/ali-ab-2003/commitlens.git
-cd commitlens
+git clone https://github.com/ali-ab-2003/devbrief.git
+cd devbrief
 npm.cmd install
 npm.cmd run build
 npm.cmd test
