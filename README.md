@@ -29,7 +29,7 @@ devbrief report --month
 Configure machine-wide scanning:
 
 ```powershell
-devbrief init "D:\Work"
+devbrief init "Your work repository"
 devbrief report --all --week
 ```
 
@@ -81,9 +81,9 @@ Using `post` sends a digest summary to Groq. Git history scanning stays local.
 ## Config
 
 ```powershell
-devbrief config add-root "D:\Work"
+devbrief config add-root "Your work repository"
 devbrief config list-roots
-devbrief config remove-root "D:\Work"
+devbrief config remove-root "Your work repository"
 devbrief config clear-roots
 devbrief config clear-groq-key
 devbrief config path
