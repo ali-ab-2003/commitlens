@@ -1,6 +1,6 @@
 {
   "name": "devbrief",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Offline local Git repository activity digest and streak reporter",
   "main": "dist/cli.js",
   "types": "dist/cli.d.ts",
