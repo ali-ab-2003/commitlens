@@ -34,6 +34,15 @@ Run inside any Git repository:
 devbrief report --week
 ```
 
+Or target a specific repository from anywhere:
+
+```powershell
+devbrief report --repo "C:\Users\You\Projects\my-app" --week
+devbrief post --repo "C:\Users\You\Projects\my-app" --dry-run-prompt
+```
+
+Configured scan roots are only used when you explicitly pass `--all`.
+
 Example output:
 
 ```text

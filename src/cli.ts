@@ -48,6 +48,7 @@ program
   .option("--week", "Shortcut for --since \"7 days ago\"")
   .option("--month", "Shortcut for --since \"30 days ago\"")
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
+  .option("-r, --repo <path>", "Generate the report for a specific local Git repository")
   .option("--all", "Scan all repositories under configured machine-wide roots")
   .option("--author <pattern>", "Only include commits matching this git author pattern")
   .option("--mine", "Only include commits by the configured git user")
@@ -62,6 +63,7 @@ program
 
 Examples:
   $ devbrief report --since "7 days ago"
+  $ devbrief report --repo "C:\\Users\\You\\Projects\\my-app"
   $ devbrief report --all --exclude-bots
   $ devbrief report --author "Your Name" --format markdown --save
 `,
@@ -87,18 +89,22 @@ Examples:
       return;
     }
 
+    if (options.repo && options.all) {
+      printRepoScopeConflict();
+      return;
+    }
+
     if (options.all) {
       await printAllReposReport(options, commitOptions);
       return;
     }
 
-    if (!(await isGitRepository())) {
-      console.error("devbrief must be run inside a Git repository.");
-      process.exitCode = 1;
+    const root = await resolveRepoRoot(options.repo);
+
+    if (!root) {
       return;
     }
 
-    const root = await getGitRoot();
     const commits = await getCommits({
       cwd: root,
       ...commitOptions,
@@ -107,7 +113,7 @@ Examples:
     await printAndMaybeSaveReport(
       {
         title: "DevBrief",
-        scope: "current repository",
+        scope: options.repo ? "selected repository" : "current repository",
         range: `since ${options.since}`,
         repo: root,
         digest,
@@ -127,6 +133,7 @@ program
   .option("-l, --limit <number>", "Maximum commits to scan", "50")
   .option("--style <style>", "Post style: humble, punchy, or technical", "humble")
   .option("--model <model>", "Groq model to use", "llama-3.3-70b-versatile")
+  .option("-r, --repo <path>", "Generate the post for a specific local Git repository")
   .option("--all", "Scan all repositories under configured machine-wide roots")
   .option("--author <pattern>", "Only include commits matching this git author pattern")
   .option("--mine", "Only include commits by the configured git user")
@@ -140,6 +147,7 @@ program
 
 Examples:
   $ devbrief post --style humble
+  $ devbrief post --repo "C:\\Users\\You\\Projects\\my-app"
   $ devbrief post --all --exclude-bots
   $ devbrief post --dry-run-prompt
 `,
@@ -150,6 +158,7 @@ Examples:
       limit: string;
       style: LinkedInPostStyle;
       model: string;
+      repo?: string;
       all?: boolean;
       author?: string;
       mine?: boolean;
@@ -180,6 +189,11 @@ Examples:
         return;
       }
 
+      if (options.repo && options.all) {
+        printRepoScopeConflict();
+        return;
+      }
+
       let report: ReportDocument;
 
       if (options.all) {
@@ -198,20 +212,19 @@ Examples:
           repositories: activity.filter((repo) => repo.commits.length > 0),
         };
       } else {
-        if (!(await isGitRepository())) {
-          console.error("devbrief must be run inside a Git repository.");
-          process.exitCode = 1;
+        const root = await resolveRepoRoot(options.repo);
+
+        if (!root) {
           return;
         }
 
-        const root = await getGitRoot();
         const commits = await getCommits({
           cwd: root,
           ...commitOptions,
         });
         report = {
           title: "DevBrief",
-          scope: "current repository",
+          scope: options.repo ? "selected repository" : "current repository",
           range: `since ${options.since}`,
           repo: root,
           digest: buildDigest(commits),
@@ -387,6 +400,7 @@ type ReportOptions = {
   since: string;
   limit: string;
   all?: boolean;
+  repo?: string;
   week?: boolean;
   month?: boolean;
   author?: string;
@@ -537,6 +551,27 @@ function formatGroqError(error: unknown): string {
   }
 
   return `Groq request failed: ${message}`;
+}
+
+async function resolveRepoRoot(repoPath?: string): Promise<string | undefined> {
+  const cwd = repoPath ?? process.cwd();
+
+  if (!(await isGitRepository(cwd))) {
+    console.error(
+      repoPath
+        ? `Not a Git repository: ${repoPath}`
+        : "devbrief must be run inside a Git repository, or use --repo <path>.",
+    );
+    process.exitCode = 1;
+    return undefined;
+  }
+
+  return getGitRoot(cwd);
+}
+
+function printRepoScopeConflict(): void {
+  console.error("Use either --repo <path> or --all, not both.");
+  process.exitCode = 1;
 }
 
 async function resolveDefaultInitRoot(): Promise<string> {

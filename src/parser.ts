@@ -9,7 +9,7 @@ export function parseCommitLine(line: string): CommitSummary | null {
   const [hash, author, date, ...subjectParts] = line.split("\t");
   const subject = subjectParts.join("\t");
 
-  if (!hash || !author || !date || !subject) {
+  if (!hash || !author || !date || !subject) { 
     return null;
   }
 
